@@ -1,0 +1,10 @@
+body{margin:0;font-family:Arial,sans-serif;background:#f5f5f5}
+.gallery{column-count:4;column-gap:16px;padding:16px}
+@media(max-width:992px){.gallery{column-count:3}}
+@media(max-width:768px){.gallery{column-count:2}}
+@media(max-width:480px){.gallery{column-count:1}}
+.image-card{break-inside:avoid;margin-bottom:16px;position:relative}
+.image-card img{width:100%;display:block;border-radius:8px;cursor:pointer}
+.image-number{position:absolute;bottom:8px;right:8px;background:#0008;color:#fff;padding:2px 6px;border-radius:4px;font-size:12px}
+.image-skeleton{height:240px;background:#e5e5e5;border-radius:8px;margin-bottom:16px}
+.gallery-header,.search-bar{padding:16px;text-align:center}
