@@ -235,10 +235,18 @@ export async function searchImages(query) {
  */
 export function prefetchImages(images = []) {
 
+    if (
+        navigator.connection?.saveData
+    ) {
+        return;
+    }
+
     images.forEach(image => {
 
         const img = new Image();
 
+        img.loading = "eager";
+        img.decoding = "async";
         img.src = image.src;
 
     });

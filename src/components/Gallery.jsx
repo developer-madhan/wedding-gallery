@@ -32,6 +32,8 @@ export default function Gallery() {
     useEffect(() => {
         if (!observerRef.current) return;
 
+        const target = observerRef.current;
+
         const observer = new IntersectionObserver(
             (entries) => {
                 if (entries[0].isIntersecting && hasMore && !loadingMore) {
@@ -39,11 +41,14 @@ export default function Gallery() {
                 }
             },
             {
-                rootMargin: "500px",
+                rootMargin: "800px",
+                threshold: 0,
             }
         );
 
-        observer.observe(observerRef.current);
+        requestAnimationFrame(() => {
+            observer.observe(target);
+        });
 
         return () => observer.disconnect();
     }, [hasMore, loadingMore, loadMore]);
@@ -97,9 +102,7 @@ export default function Gallery() {
                 ))}
             </div>
 
-            {loadingMore && (
-                <LoadingSkeleton count={6} compact />
-            )}
+            {loadingMore && <LoadingSkeleton count={6} compact />}
 
             <div ref={observerRef} style={{ height: 40 }} />
 

@@ -1,4 +1,4 @@
-export default function GalleryHeader({ title, total }) {
+export default function GalleryHeader({ title, loaded, total }) {
     return (
         <header className="gallery-header">
             <h1>{title}</h1>

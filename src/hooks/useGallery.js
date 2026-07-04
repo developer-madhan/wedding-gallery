@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
     loadGalleryConfig,
@@ -22,6 +22,8 @@ export default function useGallery() {
     const [error, setError] = useState(null);
 
     const [page, setPage] = useState(1);
+    const pageRef = useRef(1);
+    const loadingRef = useRef(false);
 
     const [search, setSearch] = useState("");
 
@@ -81,6 +83,7 @@ export default function useGallery() {
 
             setFilteredImages(list);
 
+            pageRef.current = 1;
             setPage(1);
 
             prefetchImages(
@@ -108,7 +111,31 @@ export default function useGallery() {
      */
     const loadMore = useCallback(async () => {
 
+        console.log("loadMore() called");
+
+        if (loadingMore) {
+            console.log("blocked: loadingMore");
+            return;
+        }
+
+        if (!hasMore) {
+            console.log("blocked: hasMore = false");
+            return;
+        }
+
+        if (search.length) {
+            console.log("blocked: search active");
+            return;
+        }
+
+        console.log("Current page:", page);
+
+        const nextPage = page + 1;
+
+        console.log("Loading page:", nextPage);
+
         if (
+            loadingRef.current ||
             loadingMore ||
             !hasMore ||
             search.length
@@ -116,11 +143,12 @@ export default function useGallery() {
             return;
         }
 
+        loadingRef.current = true;
         setLoadingMore(true);
 
         try {
 
-            const nextPage = page + 1;
+            const nextPage = pageRef.current + 1;
 
             const nextImages =
                 await getImagesPage(
@@ -151,6 +179,7 @@ export default function useGallery() {
 
             });
 
+            pageRef.current = nextPage;
             setPage(nextPage);
 
             prefetchImages(
@@ -173,6 +202,7 @@ export default function useGallery() {
 
         } finally {
 
+            loadingRef.current = false;
             setLoadingMore(false);
 
         }
