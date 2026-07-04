@@ -1,254 +1,102 @@
-/**
- * ============================================
- * imageService.js
- * Wedding Gallery Image Service
- * ============================================
- *
- * Responsibilities
- *  - Load gallery configuration
- *  - Generate image URLs
- *  - Provide pagination
- *  - Search images
- *  - Prefetch upcoming images
- *
- */
+// src/services/imageService.js
+// Client-side "database" for the gallery. Images are generated deterministically
+// from a small JSON config (baseUrl/extension/padding/total) so we never have to
+// ship or fetch a manifest of 570 entries.
 
-let galleryConfig = null;
+const CONFIG_URL = "/images.json";
+const REQUIRED_KEYS = ["baseUrl", "extension", "padding", "total"];
 
-/**
- * Load images.json only once
- */
-export async function loadGalleryConfig() {
-    if (galleryConfig) {
-        return galleryConfig;
+let configCache = null;
+let configPromise = null;
+
+function validateConfig(config) {
+  if (!config || typeof config !== "object") {
+    throw new Error("Invalid images.json");
+  }
+
+  for (const key of REQUIRED_KEYS) {
+    if (!(key in config)) {
+      throw new Error(`Missing "${key}" in images.json`);
     }
+  }
 
-    const response = await fetch("/images.json");
+  if (!(config.total > 0)) {
+    throw new Error("Total images must be greater than zero.");
+  }
 
-    if (!response.ok) {
-        throw new Error("Unable to load images.json");
-    }
-
-    galleryConfig = await response.json();
-
-    return galleryConfig;
+  return config;
 }
 
 /**
- * Return complete image list
+ * Fetch + cache the gallery configuration. In-flight requests are shared so
+ * concurrent callers (e.g. StrictMode double-invoke) never issue duplicate
+ * network requests.
  */
-export async function getImages() {
+export async function getGalleryConfig(forceRefresh = false) {
+  if (configCache && !forceRefresh) return configCache;
 
-    const config = await loadGalleryConfig();
+  if (!configPromise || forceRefresh) {
+    configPromise = fetch(CONFIG_URL, { cache: "force-cache" })
+      .then((response) => {
+        if (!response.ok) throw new Error("Unable to load images.json");
+        return response.json();
+      })
+      .then((json) => {
+        configCache = validateConfig(json);
+        return configCache;
+      })
+      .catch((err) => {
+        configPromise = null;
+        throw err;
+      });
+  }
 
-    return Array.from(
-        { length: config.total },
-        (_, index) => {
+  return configPromise;
+}
 
-            const id = index + 1;
+/** Zero-pad image numbers. Example: 1 -> 0001 */
+export function padNumber(number, padding) {
+  return String(number).padStart(padding, "0");
+}
 
-            return {
+export function getImageUrl(id, config) {
+  const file = padNumber(id, config.padding);
+  return `${config.baseUrl}${file}.${config.extension}`;
+}
 
-                id,
-
-                number: String(id).padStart(
-                    config.padding,
-                    "0"
-                ),
-
-                src:
-                    config.baseUrl +
-                    String(id).padStart(
-                        config.padding,
-                        "0"
-                    ) +
-                    "." +
-                    config.extension,
-
-                alt: `Wedding Photo ${id}`
-
-            };
-
-        }
-    );
-
+export function createImage(id, config) {
+  const filename = `${padNumber(id, config.padding)}.${config.extension}`;
+  return {
+    id,
+    index: id - 1,
+    filename,
+    src: getImageUrl(id, config),
+    alt: `Wedding photo ${id} of ${config.total}`,
+  };
 }
 
 /**
- * Total Images
+ * Build the full, flat list of images from config. This is a pure, cheap
+ * computation (no network) so it's safe to memoize on the config reference
+ * and hand the whole array straight to the virtualizer.
  */
-export async function getTotalImages() {
-
-    const config = await loadGalleryConfig();
-
-    return config.total;
-
+export function buildImageList(config) {
+  return Array.from({ length: config.total }, (_, i) => createImage(i + 1, config));
 }
 
-/**
- * Get image by id
- */
-export async function getImage(id) {
+/** Warm the browser's image cache for the first N images. */
+export function prefetchImages(images = [], limit = 12) {
+  if (!Array.isArray(images) || typeof window === "undefined") return;
 
-    const config = await loadGalleryConfig();
-
-    if (id < 1 || id > config.total) {
-        return null;
-    }
-
-    return {
-
-        id,
-
-        number: String(id).padStart(
-            config.padding,
-            "0"
-        ),
-
-        src:
-            config.baseUrl +
-            String(id).padStart(
-                config.padding,
-                "0"
-            ) +
-            "." +
-            config.extension,
-
-        alt: `Wedding Photo ${id}`
-
-    };
-
+  const count = Math.min(images.length, limit);
+  for (let i = 0; i < count; i++) {
+    const img = new window.Image();
+    img.decoding = "async";
+    img.src = images[i].src;
+  }
 }
 
-/**
- * Pagination
- *
- * page starts from 1
- */
-export async function getImagesPage(
-    page = 1,
-    pageSize = 30
-) {
-
-    const config = await loadGalleryConfig();
-
-    const start = (page - 1) * pageSize + 1;
-
-    const end = Math.min(
-        start + pageSize - 1,
-        config.total
-    );
-
-    const images = [];
-
-    for (let id = start; id <= end; id++) {
-
-        images.push({
-
-            id,
-
-            number: String(id).padStart(
-                config.padding,
-                "0"
-            ),
-
-            src:
-                config.baseUrl +
-                String(id).padStart(
-                    config.padding,
-                    "0"
-                ) +
-                "." +
-                config.extension,
-
-            alt: `Wedding Photo ${id}`
-
-        });
-
-    }
-
-    return images;
-
-}
-
-/**
- * Search
- *
- * Examples
- * 1
- * 15
- * 120
- * 999
- */
-export async function searchImages(query) {
-
-    const config = await loadGalleryConfig();
-
-    if (!query) {
-        return [];
-    }
-
-    const search = query
-        .toString()
-        .trim();
-
-    const results = [];
-
-    for (let id = 1; id <= config.total; id++) {
-
-        const number = String(id).padStart(
-            config.padding,
-            "0"
-        );
-
-        if (
-            number.includes(search) ||
-            id.toString().includes(search)
-        ) {
-
-            results.push({
-
-                id,
-
-                number,
-
-                src:
-                    config.baseUrl +
-                    number +
-                    "." +
-                    config.extension,
-
-                alt: `Wedding Photo ${id}`
-
-            });
-
-        }
-
-    }
-
-    return results;
-
-}
-
-/**
- * Prefetch upcoming images
- */
-export function prefetchImages(images = []) {
-
-    if (
-        navigator.connection?.saveData
-    ) {
-        return;
-    }
-
-    images.forEach(image => {
-
-        const img = new Image();
-
-        img.loading = "eager";
-        img.decoding = "async";
-        img.src = image.src;
-
-    });
-
+export function clearGalleryCache() {
+  configCache = null;
+  configPromise = null;
 }

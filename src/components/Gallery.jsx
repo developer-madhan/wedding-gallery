@@ -1,118 +1,124 @@
-import { useEffect, useRef, useState } from "react";
-import { motion } from "motion/react";
+import { lazy, Suspense, useCallback, useState } from "react";
 
 import useGallery from "../hooks/useGallery";
 
+import SEO from "./SEO";
 import GalleryHeader from "./GalleryHeader";
-import SearchBar from "./SearchBar";
-import ImageCard from "./ImageCard";
+import GalleryGrid from "./GalleryGrid";
 import LoadingSkeleton from "./LoadingSkeleton";
-import LightboxViewer from "./LightboxViewer";
+import EmptyState from "./EmptyState";
+import LoadMoreButton from "./LoadMoreButton";
+
+// The lightbox (plus its zoom/fullscreen/download/counter plugins and CSS)
+// is only needed once someone opens a photo, so it's excluded from the
+// initial JS bundle entirely and fetched on demand.
+const LightboxViewer = lazy(() => import("./LightboxViewer"));
 
 export default function Gallery() {
-    const {
-        images,
-        loading,
-        loadingMore,
-        error,
-        hasMore,
-        loadMore,
-        performSearch,
-        clearSearch,
-        search,
-        displayedCount,
-        config,
-    } = useGallery();
+  const {
+    images,
+    totalImages,
+    matchedImages,
+    visibleCount,
+    hasMore,
+    loadMore,
+    batchSize,
+    loading,
+    error,
+    searchQuery,
+    searching,
+    isSearchPending,
+    setSearchQuery,
+    clearSearch,
+    refresh,
+    config,
+  } = useGallery();
 
-    const [open, setOpen] = useState(false);
-    const [currentIndex, setCurrentIndex] = useState(0);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
 
+  const openViewer = useCallback((index) => {
+    setViewerIndex(index);
+    setViewerOpen(true);
+  }, []);
 
+  const closeViewer = useCallback(() => setViewerOpen(false), []);
 
-
-
-    const openViewer = (index) => {
-        setCurrentIndex(index);
-        setOpen(true);
-    };
-
-    if (loading) {
-        return <LoadingSkeleton count={12} />;
-    }
-
-    if (error) {
-        return (
-            <div className="container py-5 text-center">
-                <h2>Something went wrong</h2>
-                <p>{error}</p>
-            </div>
-        );
-    }
-
+  if (loading) {
     return (
-        <>
-            <GalleryHeader
-                title={config?.title}
-                loaded={displayedCount}
-                total={config?.total ?? 0}
-            />
-
-            <SearchBar
-                value={search}
-                onSearch={performSearch}
-                onClear={clearSearch}
-            />
-
-            <div className="gallery masonry-grid">
-                {images.map((image, index) => (
-                    <motion.div
-                        key={image.id}
-                        initial={{ opacity: 0, y: 25 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.35 }}
-                    >
-                        <ImageCard
-                            image={image}
-                            index={index}
-                            onClick={() => openViewer(index)}
-                        />
-                    </motion.div>
-                ))}
-            </div>
-
-            {loadingMore && <LoadingSkeleton count={6} compact />}
-
-            {hasMore && (
-                <div
-                    style={{
-                        textAlign: "center",
-                        padding: "30px 0",
-                    }}
-                >
-                    <button
-                        onClick={loadMore}
-                        disabled={loadingMore}
-                        className="load-more-btn"
-                    >
-                        {loadingMore
-                            ? "Loading..."
-                            : "Load More Photos"}
-                    </button>
-                </div>
-            )}
-
-            {!hasMore && (
-                <div className="text-center py-4">
-                    <strong>All photos loaded</strong>
-                </div>
-            )}
-
-            <LightboxViewer
-                open={open}
-                index={currentIndex}
-                images={images}
-                onClose={() => setOpen(false)}
-            />
-        </>
+      <>
+        <SEO totalImages={0} />
+        <a href="#gallery-main" className="skip-link">
+          Skip to gallery
+        </a>
+        <LoadingSkeleton count={12} className="pt-10" />
+      </>
     );
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-24 text-center">
+        <h2 className="text-lg font-semibold text-neutral-900">Something went wrong</h2>
+        <p className="mt-2 text-sm text-neutral-500">{error}</p>
+        <button
+          type="button"
+          onClick={refresh}
+          className="mt-4 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <SEO totalImages={totalImages} imageBaseUrl={config?.baseUrl} />
+
+      <a href="#gallery-main" className="skip-link">
+        Skip to gallery
+      </a>
+
+      <GalleryHeader
+        title="Wedding Gallery"
+        subtitle="Every picture tells part of our story."
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onClearSearch={clearSearch}
+        searchPending={isSearchPending}
+        totalImages={totalImages}
+        matchedImages={matchedImages}
+        searching={searching}
+      />
+
+      <main id="gallery-main" aria-label="Wedding photo gallery">
+        {images.length === 0 ? (
+          <EmptyState query={searchQuery} onClear={clearSearch} />
+        ) : (
+          <>
+            <GalleryGrid images={images} onOpenImage={openViewer} />
+            {hasMore && (
+              <LoadMoreButton
+                onClick={loadMore}
+                remaining={totalImages - visibleCount}
+                batchSize={batchSize}
+              />
+            )}
+          </>
+        )}
+      </main>
+
+      {viewerOpen && (
+        <Suspense fallback={null}>
+          <LightboxViewer
+            open={viewerOpen}
+            index={viewerIndex}
+            images={images}
+            onClose={closeViewer}
+          />
+        </Suspense>
+      )}
+    </>
+  );
 }

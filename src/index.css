@@ -1,88 +1,43 @@
 @import "tailwindcss";
 
+:root {
+  color-scheme: light;
+}
+
 body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background: #f5f5f5
+  margin: 0;
+  background: #f5f5f5;
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-.gallery {
-    column-count: 4;
-    column-gap: 16px;
-    padding: 16px
+/* Visually-hidden until focused — lets keyboard users jump straight past the
+   hero/search header into the photo grid. */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 1rem;
+  z-index: 50;
+  background: #e11d48;
+  color: #fff;
+  padding: 0.5rem 1rem;
+  border-radius: 0 0 0.5rem 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: top 0.2s ease;
 }
 
-@media(max-width:992px) {
-    .gallery {
-        column-count: 3
-    }
+.skip-link:focus {
+  top: 0;
 }
 
-@media(max-width:768px) {
-    .gallery {
-        column-count: 2
-    }
-}
-
-@media(max-width:480px) {
-    .gallery {
-        column-count: 1
-    }
-}
-
-.image-card {
-    break-inside: avoid;
-    margin-bottom: 16px;
-    position: relative
-}
-
-.image-card img {
-    width: 100%;
-    display: block;
-    border-radius: 8px;
-    cursor: pointer
-}
-
-.image-number {
-    position: absolute;
-    bottom: 8px;
-    right: 8px;
-    background: #0008;
-    color: #fff;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 12px
-}
-
-.image-skeleton {
-    height: 240px;
-    background: #e5e5e5;
-    border-radius: 8px;
-    margin-bottom: 16px
-}
-
-.gallery-header,
-.search-bar {
-    padding: 16px;
-    text-align: center
-}
-
-.load-more-btn {
-    background: #2563eb;
-    color: #fff;
-    border: none;
-    padding: 12px 28px;
-    font-size: 16px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: .25s;
-}
-
-.load-more-btn:hover {
-    background: #1d4ed8;
-}
-
-.load-more-btn:disabled {
-    opacity: .6;
-    cursor: not-allowed;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

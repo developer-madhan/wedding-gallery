@@ -1,305 +1,123 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useState, useEffect, useMemo, useCallback, useDeferredValue, useRef } from "react";
+import Fuse from "fuse.js";
 
-import {
-    loadGalleryConfig,
-    getImagesPage,
-    searchImages,
-    prefetchImages,
-} from "../services/imageService";
+import { getGalleryConfig, buildImageList, prefetchImages } from "../services/imageService";
+
+const FUSE_OPTIONS = {
+  keys: ["filename", "id"],
+  threshold: 0.3,
+  ignoreLocation: true,
+  minMatchCharLength: 1,
+};
+
+const DEFAULT_BATCH_SIZE = 60;
 
 export default function useGallery() {
+  const [config, setConfig] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [reloadToken, setReloadToken] = useState(0);
+  // How many photos are "revealed" in browsing mode. Keeping this separate
+  // from the virtualizer means the browser only ever has this many <img>
+  // tags in play at once, instead of every photo in the collection.
+  const [visibleCount, setVisibleCount] = useState(DEFAULT_BATCH_SIZE);
+  const isFirstLoad = useRef(true);
 
-    const [config, setConfig] = useState(null);
+  // Keep the input itself perfectly responsive; defer the expensive
+  // filtering work behind it. React can interrupt/restart the deferred
+  // render if the person keeps typing, so the UI never feels blocked.
+  const deferredQuery = useDeferredValue(searchInput);
+  const searching = deferredQuery.trim().length > 0;
+  const isSearchPending = searchInput !== deferredQuery;
 
-    const [images, setImages] = useState([]);
+  // Fetching config is the one true "synchronize with an external system"
+  // effect, so the fetch + state updates live directly in the effect body
+  // (not behind an extracted, eagerly-invoked callback).
+  useEffect(() => {
+    let active = true;
+    const forceRefresh = !isFirstLoad.current;
+    isFirstLoad.current = false;
 
-    const [filteredImages, setFilteredImages] = useState([]);
+    // Standard data-fetching-in-effect pattern (see react.dev/learn/synchronizing-with-effects#fetching-data):
+    // reset local status ahead of the request, guard against stale
+    // responses with the `active` flag, and clean up on unmount/re-run.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount/refresh is an intentional external sync, not derived state
+    setLoading(true);
+    setError(null);
+    setVisibleCount(DEFAULT_BATCH_SIZE);
 
-    const [loading, setLoading] = useState(true);
+    getGalleryConfig(forceRefresh)
+      .then((cfg) => {
+        if (!active) return;
+        setConfig(cfg);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setError(err.message || "Unable to load gallery.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
 
-    const [loadingMore, setLoadingMore] = useState(false);
-
-    const [error, setError] = useState(null);
-
-    const [page, setPage] = useState(1);
-    const pageRef = useRef(1);
-    const loadingRef = useRef(false);
-
-    const [search, setSearch] = useState("");
-
-    const [hasMore, setHasMore] = useState(true);
-
-    /**
-     * Load configuration
-     */
-    useEffect(() => {
-
-        async function init() {
-
-            try {
-
-                const cfg = await loadGalleryConfig();
-
-                setConfig(cfg);
-
-            } catch (err) {
-
-                setError(err.message);
-
-            }
-
-        }
-
-        init();
-
-    }, []);
-
-    /**
-     * First page
-     */
-    useEffect(() => {
-
-        if (!config) return;
-
-        loadFirstPage();
-
-    }, [config]);
-
-    /**
-     * Load first page
-     */
-    const loadFirstPage = async () => {
-
-        setLoading(true);
-
-        try {
-
-            const list = await getImagesPage(
-                1,
-                config.batchSize
-            );
-
-            setImages(list);
-
-            setFilteredImages(list);
-
-            pageRef.current = 1;
-            setPage(1);
-
-            prefetchImages(
-                list.slice(0, 10)
-            );
-
-            setHasMore(
-                list.length < config.total
-            );
-
-        } catch (err) {
-
-            setError(err.message);
-
-        } finally {
-
-            setLoading(false);
-
-        }
-
+    return () => {
+      active = false;
     };
-
-    /**
-     * Infinite Scroll
-     */
-    const loadMore = useCallback(async () => {
-
-        console.log("loadMore() called");
-
-        if (loadingMore) {
-            console.log("blocked: loadingMore");
-            return;
-        }
-
-        if (!hasMore) {
-            console.log("blocked: hasMore = false");
-            return;
-        }
-
-        if (search.length) {
-            console.log("blocked: search active");
-            return;
-        }
-
-        console.log("Current page:", page);
-
-        const nextPage = page + 1;
-
-        console.log("Loading page:", nextPage);
-
-        if (
-            loadingRef.current ||
-            loadingMore ||
-            !hasMore ||
-            search.length
-        ) {
-            return;
-        }
-
-        loadingRef.current = true;
-        setLoadingMore(true);
-
-        try {
-
-            const nextPage = pageRef.current + 1;
-
-            const nextImages =
-                await getImagesPage(
-                    nextPage,
-                    config.batchSize
-                );
-
-            if (
-                nextImages.length === 0
-            ) {
-
-                setHasMore(false);
-
-                return;
-
-            }
-
-            setImages(prev => {
-
-                const updated = [
-                    ...prev,
-                    ...nextImages
-                ];
-
-                setFilteredImages(updated);
-
-                return updated;
-
-            });
-
-            pageRef.current = nextPage;
-            setPage(nextPage);
-
-            prefetchImages(
-                nextImages.slice(0, 10)
-            );
-
-            if (
-                nextPage *
-                config.batchSize >=
-                config.total
-            ) {
-
-                setHasMore(false);
-
-            }
-
-        } catch (err) {
-
-            setError(err.message);
-
-        } finally {
-
-            loadingRef.current = false;
-            setLoadingMore(false);
-
-        }
-
-    }, [
-        page,
-        loadingMore,
-        hasMore,
-        config,
-        search,
-    ]);
-
-    /**
-     * Search
-     */
-    const performSearch = async (
-        value
-    ) => {
-
-        setSearch(value);
-
-        if (
-            value.trim() === ""
-        ) {
-
-            setFilteredImages(images);
-
-            return;
-
-        }
-
-        const results =
-            await searchImages(value);
-
-        setFilteredImages(results);
-
-    };
-
-    /**
-     * Clear Search
-     */
-    const clearSearch = () => {
-
-        setSearch("");
-
-        setFilteredImages(images);
-
-    };
-
-    /**
-     * Total Loaded
-     */
-    const loadedCount = useMemo(() => {
-
-        return images.length;
-
-    }, [images]);
-
-    /**
-     * Total Displayed
-     */
-    const displayedCount = useMemo(() => {
-
-        return filteredImages.length;
-
-    }, [filteredImages]);
-
-    return {
-
-        config,
-
-        images: filteredImages,
-
-        allImages: images,
-
-        loading,
-
-        loadingMore,
-
-        error,
-
-        page,
-
-        hasMore,
-
-        search,
-
-        loadedCount,
-
-        displayedCount,
-
-        loadMore,
-
-        performSearch,
-
-        clearSearch,
-
-    };
-
+  }, [reloadToken]);
+
+  // The full collection is a pure function of config — cheap to compute,
+  // and it's what search runs against (search should reach every photo,
+  // not just the ones revealed so far).
+  const allImages = useMemo(() => (config ? buildImageList(config) : []), [config]);
+
+  const batchSize = config?.batchSize || DEFAULT_BATCH_SIZE;
+  const hasMore = !searching && visibleCount < allImages.length;
+
+  // Only this "browsable" slice gets handed to the grid in browsing mode.
+  // react-virtuoso still virtualizes *within* it, so even a fully-expanded
+  // gallery stays light — this just caps how much can be requested at once.
+  const browsableImages = useMemo(
+    () => allImages.slice(0, Math.min(visibleCount, allImages.length)),
+    [allImages, visibleCount]
+  );
+
+  useEffect(() => {
+    if (browsableImages.length) prefetchImages(browsableImages, 12);
+  }, [browsableImages]);
+
+  const fuse = useMemo(() => {
+    if (!allImages.length) return null;
+    return new Fuse(allImages, FUSE_OPTIONS);
+  }, [allImages]);
+
+  const images = useMemo(() => {
+    if (!searching || !fuse) return browsableImages;
+    return fuse.search(deferredQuery.trim()).map((result) => result.item);
+  }, [searching, fuse, deferredQuery, browsableImages]);
+
+  const setSearchQuery = useCallback((value) => setSearchInput(value), []);
+  const clearSearch = useCallback(() => setSearchInput(""), []);
+  const refresh = useCallback(() => setReloadToken((token) => token + 1), []);
+  const loadMore = useCallback(() => {
+    setVisibleCount((count) => Math.min(count + batchSize, allImages.length));
+  }, [batchSize, allImages.length]);
+
+  return {
+    images,
+    totalImages: allImages.length,
+    matchedImages: images.length,
+    visibleCount: browsableImages.length,
+    hasMore,
+    loadMore,
+    batchSize,
+    loading,
+    error,
+    searchQuery: searchInput,
+    searching,
+    isSearchPending,
+    setSearchQuery,
+    clearSearch,
+    refresh,
+    config,
+  };
 }

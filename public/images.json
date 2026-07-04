@@ -1,10 +1,8 @@
 {
-  "title": "Madhankumar & Jaishree Wedding Gallery",
-  "baseUrl": "https://madhankumarj.com/wedding/photos/webp/",
+  "baseUrl": "/webp/",
   "extension": "webp",
   "padding": 4,
-  "total": 650,
+  "total": 570,
   "batchSize": 30,
-  "theme": "light",
-  "version": "1.0.0"
+  "coverImage": "/cover.webp"
 }
