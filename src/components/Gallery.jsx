@@ -27,31 +27,9 @@ export default function Gallery() {
     const [open, setOpen] = useState(false);
     const [currentIndex, setCurrentIndex] = useState(0);
 
-    const observerRef = useRef(null);
 
-    useEffect(() => {
-        if (!observerRef.current) return;
 
-        const target = observerRef.current;
 
-        const observer = new IntersectionObserver(
-            (entries) => {
-                if (entries[0].isIntersecting && hasMore && !loadingMore) {
-                    loadMore();
-                }
-            },
-            {
-                rootMargin: "800px",
-                threshold: 0,
-            }
-        );
-
-        requestAnimationFrame(() => {
-            observer.observe(target);
-        });
-
-        return () => observer.disconnect();
-    }, [hasMore, loadingMore, loadMore]);
 
     const openViewer = (index) => {
         setCurrentIndex(index);
@@ -104,7 +82,24 @@ export default function Gallery() {
 
             {loadingMore && <LoadingSkeleton count={6} compact />}
 
-            <div ref={observerRef} style={{ height: 40 }} />
+            {hasMore && (
+                <div
+                    style={{
+                        textAlign: "center",
+                        padding: "30px 0",
+                    }}
+                >
+                    <button
+                        onClick={loadMore}
+                        disabled={loadingMore}
+                        className="load-more-btn"
+                    >
+                        {loadingMore
+                            ? "Loading..."
+                            : "Load More Photos"}
+                    </button>
+                </div>
+            )}
 
             {!hasMore && (
                 <div className="text-center py-4">
