@@ -7,6 +7,7 @@ import GalleryHeader from "./GalleryHeader";
 import GalleryGrid from "./GalleryGrid";
 import LoadingSkeleton from "./LoadingSkeleton";
 import EmptyState from "./EmptyState";
+import NoPhotosYet from "./NoPhotosYet";
 import LoadMoreButton from "./LoadMoreButton";
 
 // The lightbox (plus its zoom/fullscreen/download/counter plugins and CSS)
@@ -31,7 +32,7 @@ export default function Gallery() {
     setSearchQuery,
     clearSearch,
     refresh,
-    config,
+    sampleImageSrc,
   } = useGallery();
 
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -72,9 +73,18 @@ export default function Gallery() {
     );
   }
 
+  if (totalImages === 0) {
+    return (
+      <>
+        <SEO totalImages={0} />
+        <NoPhotosYet />
+      </>
+    );
+  }
+
   return (
     <>
-      <SEO totalImages={totalImages} imageBaseUrl={config?.baseUrl} />
+      <SEO totalImages={totalImages} sampleImageSrc={sampleImageSrc} />
 
       <a href="#gallery-main" className="skip-link">
         Skip to gallery

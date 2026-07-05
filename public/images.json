@@ -1,8 +1,4 @@
 {
-  "baseUrl": "/webp/",
-  "extension": "webp",
-  "padding": 4,
-  "total": 570,
-  "batchSize": 30,
+  "batchSize": 60,
   "coverImage": "/cover.webp"
 }

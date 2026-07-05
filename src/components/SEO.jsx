@@ -7,7 +7,7 @@ const DESCRIPTION =
   "Browse and relive the wedding memories of Madhankumar & Jaishree — a searchable, full-resolution photo gallery.";
 const COVER_IMAGE = `${SITE_URL}/cover.webp`;
 
-function SEO({ totalImages = 0, imageBaseUrl }) {
+function SEO({ totalImages = 0, sampleImageSrc }) {
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "ImageGallery",
@@ -19,10 +19,11 @@ function SEO({ totalImages = 0, imageBaseUrl }) {
     image: COVER_IMAGE,
   };
 
-  // If images are served from an external host, hint the browser to open
-  // that connection early instead of waiting for the first <img> request.
-  const isExternalHost = imageBaseUrl && /^https?:\/\//.test(imageBaseUrl);
-  const externalOrigin = isExternalHost ? new URL(imageBaseUrl).origin : null;
+  // If photos are served from an external host (e.g. a CDN base URL baked
+  // into the manifest), hint the browser to open that connection early
+  // instead of waiting for the first <img> request.
+  const isExternalHost = sampleImageSrc && /^https?:\/\//.test(sampleImageSrc);
+  const externalOrigin = isExternalHost ? new URL(sampleImageSrc).origin : null;
 
   return (
     <Helmet>

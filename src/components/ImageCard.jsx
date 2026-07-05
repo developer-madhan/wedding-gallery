@@ -50,8 +50,8 @@ function ImageCard({ image, index, priority = false, onOpen }) {
           <img
             src={image.src}
             alt={image.alt}
-            width={600}
-            height={600}
+            width={image.width || 600}
+            height={image.height || 600}
             loading={priority ? "eager" : "lazy"}
             decoding="async"
             fetchPriority={priority ? "high" : "low"}

@@ -1,7 +1,10 @@
 // Generates public/sitemap.xml as an image sitemap: a single page URL that
-// lists every wedding photo, so search engines can index and surface the
-// photos themselves (Google Images, etc.), not just the page shell.
-// Runs automatically before `vite build` (see package.json "prebuild").
+// lists every wedding photo from public/manifest.json, so search engines
+// can index and surface the photos themselves (Google Images, etc.), not
+// just the page shell.
+//
+// Run `npm run manifest` first (or just `npm run build`, which chains
+// manifest -> sitemap -> vite build automatically).
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -11,28 +14,31 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, "..", "public");
 const SITE_URL = "https://wedding.madhankumarj.com";
 
-function padNumber(number, padding) {
-  return String(number).padStart(padding, "0");
+function escapeXml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function resolveUrl(src) {
+  return /^https?:\/\//.test(src) ? src : `${SITE_URL}${src}`;
 }
 
 function main() {
-  const configPath = path.join(publicDir, "images.json");
-  const config = JSON.parse(readFileSync(configPath, "utf-8"));
-  const { baseUrl, extension, padding, total } = config;
+  const manifestPath = path.join(publicDir, "manifest.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
 
-  const isAbsolute = /^https?:\/\//.test(baseUrl);
-  const imageUrl = (id) => {
-    const file = `${padNumber(id, padding)}.${extension}`;
-    return isAbsolute ? `${baseUrl}${file}` : `${SITE_URL}${baseUrl}${file}`;
-  };
-
-  const imageEntries = Array.from({ length: total }, (_, i) => {
-    const id = i + 1;
-    return `    <image:image>
-      <image:loc>${imageUrl(id)}</image:loc>
-      <image:title>Wedding photo ${id}</image:title>
-    </image:image>`;
-  }).join("\n");
+  const imageEntries = manifest.images
+    .map(
+      (image) => `    <image:image>
+      <image:loc>${escapeXml(resolveUrl(image.src))}</image:loc>
+      <image:title>${escapeXml(image.alt)}</image:title>
+    </image:image>`
+    )
+    .join("\n");
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
@@ -47,7 +53,7 @@ ${imageEntries}
 `;
 
   writeFileSync(path.join(publicDir, "sitemap.xml"), xml);
-  console.log(`sitemap.xml generated with ${total} images.`);
+  console.log(`✓ sitemap.xml generated with ${manifest.total} image(s).`);
 }
 
 main();

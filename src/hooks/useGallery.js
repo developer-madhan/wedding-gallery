@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useDeferredValue, useRef } from "react";
 import Fuse from "fuse.js";
 
-import { getGalleryConfig, buildImageList, prefetchImages } from "../services/imageService";
+import { getManifest, getSiteConfig, buildImageList, prefetchImages } from "../services/imageService";
 
 const FUSE_OPTIONS = {
   keys: ["filename", "id"],
@@ -13,7 +13,8 @@ const FUSE_OPTIONS = {
 const DEFAULT_BATCH_SIZE = 60;
 
 export default function useGallery() {
-  const [config, setConfig] = useState(null);
+  const [manifest, setManifest] = useState(null);
+  const [siteConfig, setSiteConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchInput, setSearchInput] = useState("");
@@ -31,9 +32,9 @@ export default function useGallery() {
   const searching = deferredQuery.trim().length > 0;
   const isSearchPending = searchInput !== deferredQuery;
 
-  // Fetching config is the one true "synchronize with an external system"
-  // effect, so the fetch + state updates live directly in the effect body
-  // (not behind an extracted, eagerly-invoked callback).
+  // Fetching the manifest + site config is the one true "synchronize with
+  // an external system" effect, so the fetch + state updates live directly
+  // in the effect body (not behind an extracted, eagerly-invoked callback).
   useEffect(() => {
     let active = true;
     const forceRefresh = !isFirstLoad.current;
@@ -47,10 +48,11 @@ export default function useGallery() {
     setError(null);
     setVisibleCount(DEFAULT_BATCH_SIZE);
 
-    getGalleryConfig(forceRefresh)
-      .then((cfg) => {
+    Promise.all([getManifest(forceRefresh), getSiteConfig(forceRefresh)])
+      .then(([manifestResult, siteConfigResult]) => {
         if (!active) return;
-        setConfig(cfg);
+        setManifest(manifestResult);
+        setSiteConfig(siteConfigResult);
       })
       .catch((err) => {
         if (!active) return;
@@ -65,12 +67,12 @@ export default function useGallery() {
     };
   }, [reloadToken]);
 
-  // The full collection is a pure function of config — cheap to compute,
-  // and it's what search runs against (search should reach every photo,
-  // not just the ones revealed so far).
-  const allImages = useMemo(() => (config ? buildImageList(config) : []), [config]);
+  // The full collection is a pure function of the manifest — cheap to
+  // compute, and it's what search runs against (search should reach every
+  // photo, not just the ones revealed so far).
+  const allImages = useMemo(() => (manifest ? buildImageList(manifest) : []), [manifest]);
 
-  const batchSize = config?.batchSize || DEFAULT_BATCH_SIZE;
+  const batchSize = siteConfig?.batchSize || DEFAULT_BATCH_SIZE;
   const hasMore = !searching && visibleCount < allImages.length;
 
   // Only this "browsable" slice gets handed to the grid in browsing mode.
@@ -118,6 +120,7 @@ export default function useGallery() {
     setSearchQuery,
     clearSearch,
     refresh,
-    config,
+    manifestGeneratedAt: manifest?.generatedAt ?? null,
+    sampleImageSrc: allImages[0]?.src,
   };
 }
